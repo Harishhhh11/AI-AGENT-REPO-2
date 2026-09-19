@@ -1,13 +1,13 @@
 {
-  "nextId": 970,
+  "nextId": 971,
   "organization": {
     "id": 1,
-    "name": "Test Org",
-    "email": "org@example.com",
-    "phone": "+1 (800) 555-0199",
-    "address": "100 Innovation Parkway, Suite 400, San Francisco, CA 94105",
-    "website": "https://apexsolutions.ai",
-    "timezone": "America/Los_Angeles",
+    "name": "Maruthi Technologies",
+    "email": "training@maruthitechnologies.com",
+    "phone": "+91 98765 43210",
+    "address": "Maruthi Technologies, Ameerpet, Hyderabad, Telangana, India",
+    "website": "https://www.maruthitechnologies.com",
+    "timezone": "Asia/Kolkata",
     "working_hours": {
       "start": "09:00",
       "end": "18:00",
@@ -61,6 +61,40 @@
     ]
   },
   "agents": [
+    {
+      "id": 971,
+      "uuid": "agent-971",
+      "organization_id": 1,
+      "name": "Maya — Maruthi Technologies",
+      "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
+      "public_slug": "maruthi-maya",
+      "welcome_message": "Hello! Welcome to Maruthi Technologies. I'm Maya, your AI receptionist. How can I help you today?",
+      "system_instructions": "You are Maya, the AI receptionist for Maruthi Technologies. Use only the knowledge documents explicitly assigned to this receptionist for factual business and course information. Never invent missing facts. Keep factual answers concise and conversational. Maintain separate preferences for each course. An information question does not start or advance the enrollment workflow. If a requested course is not in the knowledge base, say it is not currently listed and ask whether the visitor means Core Python Programming or Core Java Programming. Never claim placement support, discounts, alternative batches, demo links, trainers, recordings, installment plans, or schedule flexibility unless present in the assigned documents.",
+      "personality": "friendly",
+      "language": "multilingual",
+      "voice_id": "maya_warm",
+      "speaking_style": "warm_conversational",
+      "channels": [
+        "web",
+        "voice",
+        "whatsapp"
+      ],
+      "allowed_tools": [
+        "search_knowledge",
+        "get_company_info",
+        "create_lead",
+        "schedule_appointment",
+        "transfer_to_human"
+      ],
+      "is_published": true,
+      "is_active": true,
+      "knowledge_item_ids": [
+        841,
+        829
+      ],
+      "created_at": "2026-09-19T06:45:00.000Z",
+      "updated_at": "2026-09-19T06:45:00.000Z"
+    },
     {
       "id": 874,
       "uuid": "agent-875",
