@@ -20,9 +20,9 @@ app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 // Resilient Body Parser / JSON Syntax Error Recovery Middleware
 app.use((err: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
-  if (err instanceof SyntaxError && "body" in (err as Record<string, unknown>)) {
+  if (err instanceof SyntaxError && "body" in (err as unknown as Record<string, unknown>)) {
     try {
-      const raw = (err as Record<string, unknown>).body;
+      const raw = (err as unknown as Record<string, unknown>).body;
       if (typeof raw === "string") {
         let cleaned = raw.trim();
         if (cleaned.startsWith('""') && cleaned.endsWith('""')) {
@@ -1646,7 +1646,7 @@ function cleanDisplayTitle(raw: string): string {
   return s.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
 }
 
-function parseKnowledgeBase(docs: KnowledgeItem[]): ParsedKnowledgeDoc[] {
+function parseKnowledgeBase(docs: KnowledgeItemModel[]): ParsedKnowledgeDoc[] {
   const activeDocs = (docs || []).filter((doc) => {
     if (!doc || !doc.content) return false;
     if (doc.is_active === false) return false;
@@ -2276,7 +2276,7 @@ async function executeReceptionistTurn(
       reply: `I cannot assist with attacks, unauthorized access, or malicious activities. As an AI receptionist for ${compName}, I am here solely to provide information about our verified training courses, admissions, batch schedules, and student support. How can I assist you with our programs today?`,
       toolsExecuted: [],
       groundingSources: [],
-      state: "active",
+      state: "INFORMATION",
       intent: "security_refusal",
       language: lang,
       isEscalated: false,
@@ -2368,7 +2368,7 @@ async function executeReceptionistTurn(
       lower.includes("same mode")
     ) {
       const prevBotMsg = conv && messages
-        ? messages.filter((m) => m.conversation_id === conv.id && m.role === "model").slice(-1)[0]?.content?.toLowerCase() || ""
+        ? messages.filter((m) => m.conversation_id === conv.id && m.role === "assistant").slice(-1)[0]?.content?.toLowerCase() || ""
         : "";
       if (prevBotMsg.includes("classroom") && !prevBotMsg.includes("online")) {
         foundMode = "Classroom Sessions";
@@ -2705,26 +2705,79 @@ async function executeReceptionistTurn(
   const KNOWN_UNSUPPORTED_COURSES = [
     "Web Development",
     "Web Dev",
+    "Web Designing",
+    "Web Design",
+    "Web",
+    "Cyber Security",
+    "Cybersecurity",
+    "Cyber",
+    "Information Security",
+    "Ethical Hacking",
     "Data Science",
+    "Data Analytics",
     "Machine Learning",
     "Artificial Intelligence",
+    "AI",
+    "Deep Learning",
     "Cloud Computing",
+    "Cloud",
     "AWS",
+    "Amazon Web Services",
     "Azure",
+    "Microsoft Azure",
+    "GCP",
+    "Google Cloud",
     "DevOps",
     "Flutter",
     "React Native",
+    "React JS",
     "React",
     "Angular",
-    "Cyber Security",
+    "Node JS",
+    "Node",
+    "MERN",
+    "MEAN",
+    "Full Stack Web",
+    "Full Stack Development",
+    "Full Stack",
     "Blockchain",
     "Digital Marketing",
+    "Software Testing",
+    "Testing",
+    "Selenium",
+    "Automation Testing",
+    "QA",
+    "C++",
+    "C#",
+    ".NET",
+    "Dot Net",
+    "PHP",
+    "Salesforce",
+    "Power BI",
+    "Tableau",
+    "Android",
+    "iOS",
+    "Kotlin",
+    "Swift",
+    "SAP",
   ];
 
   const detectedUnsupportedCourses: string[] = [];
-  for (const uc of KNOWN_UNSUPPORTED_COURSES) {
-    if (new RegExp(`\\b${uc.toLowerCase().replace(/\\+/g, "\\\\+")}\\b`, "i").test(lower)) {
-      detectedUnsupportedCourses.push(uc);
+  const sortedUnsupported = [...KNOWN_UNSUPPORTED_COURSES].sort((a, b) => b.length - a.length);
+  for (const uc of sortedUnsupported) {
+    const escaped = uc.toLowerCase().replace(/[+.*^$()[\]{}|\\]/g, "\\$&");
+    if (new RegExp(`\\b${escaped}\\b`, "i").test(lower)) {
+      const canonical =
+        uc === "Web" || uc === "Web Dev" || uc === "Web Design" || uc === "Web Designing"
+          ? "Web Development"
+          : uc === "Cybersecurity" || uc === "Cyber"
+          ? "Cyber Security"
+          : uc === "AI"
+          ? "Artificial Intelligence"
+          : uc;
+      if (!detectedUnsupportedCourses.includes(canonical)) {
+        detectedUnsupportedCourses.push(canonical);
+      }
     }
   }
 
@@ -2977,6 +3030,19 @@ async function executeReceptionistTurn(
     lower.includes("eppudu") ||
     lower.includes("kab shuru");
 
+  const isDurationQuery =
+    lower.includes("duration") ||
+    lower.includes("how long") ||
+    lower.includes("how many months") ||
+    lower.includes("how many weeks") ||
+    lower.includes("how many days") ||
+    lower.includes("how much time") ||
+    lower.includes("course period");
+
+  const isTopicsQuery = isTopicQuery;
+  const isBatchTimingQuery = isBatchOrTimingQuery;
+  const isTimingQuery = isBatchOrTimingQuery;
+
   const isPerCourseModeAssignment =
     (lower.includes("for java") || lower.includes("for python") || (lower.includes("java") && lower.includes("python"))) &&
     (lower.includes("online") || lower.includes("offline") || lower.includes("classroom"));
@@ -3041,14 +3107,108 @@ async function executeReceptionistTurn(
 
   const isWeatherOrChitchat =
     lower.includes("weather") ||
+    lower.includes("temperature") ||
+    lower.includes("climate") ||
+    lower.includes("raining") ||
+    lower.includes("rain") ||
+    lower.includes("rainy") ||
+    lower.includes("forecast") ||
+    lower.includes("sunny") ||
+    lower.includes("hot today") ||
+    lower.includes("cold today") ||
+    lower.includes("hot outside") ||
+    lower.includes("cold outside") ||
     lower.includes("how are you") ||
     lower.includes("who are you") ||
     lower.includes("what is your name") ||
     lower.includes("how do you do") ||
-    lower.includes("nice to meet");
+    lower.includes("nice to meet") ||
+    lower.includes("tell me a joke") ||
+    lower.includes("tell a joke") ||
+    lower.includes("make me laugh") ||
+    lower.includes("who made you") ||
+    lower.includes("who created you") ||
+    lower.includes("are you a bot") ||
+    lower.includes("are you an ai") ||
+    lower.includes("are you human") ||
+    lower.includes("what can you do");
+
+  const isTimeQuery =
+    lower.includes("time now") ||
+    lower.includes("current time") ||
+    lower.includes("what time is it") ||
+    lower.includes("what is the time") ||
+    lower.includes("time right now") ||
+    lower.includes("what is today's date") ||
+    lower.includes("today's date") ||
+    lower.includes("what day is today");
+
+  const isMathQuery =
+    /\bwhat is\s+\d+\s*[x*+\-/]\s*\d+\b/i.test(lower) ||
+    /^\d+\s*[x*+\-/]\s*\d+[\s?]*$/i.test(lower.trim());
+
+  const isBikeOrParkingQuery =
+    lower.includes("reach on bike") ||
+    lower.includes("reach you on bike") ||
+    lower.includes("come by bike") ||
+    (lower.includes("parking") && !lower.includes("domain"));
+
+  const isKnowledgeBaseCountQuery =
+    lower.includes("how many knowledge documents") ||
+    lower.includes("knowledge documents") ||
+    lower.includes("how many documents") ||
+    lower.includes("documents you have");
+
+  const isUnsupportedCourseQuery =
+    detectedUnsupportedCourses.length > 0 && queryMentionedCourses.length === 0;
 
   const isGreeting = /^(hi|hello|hey|heya|hola|howdy|yo|greetings|good morning|good afternoon|good evening)[\s!.]*$/i.test(promptText);
   const isCasualAck = /^(ok|okay|k|alright|cool|great|nice|sure|got it|understood|fine|yes|yeah|yup|thanks|thank you|thx|thnx|good|perfect|sounds good|no problem|please|yes please|yep|definitely)[\s.!]*$/i.test(promptText);
+
+  const isUnrelatedOrChitchatQuery =
+    isWeatherOrChitchat ||
+    isTimeQuery ||
+    isMathQuery ||
+    isBikeOrParkingQuery ||
+    isKnowledgeBaseCountQuery ||
+    lower.includes("cricket") ||
+    lower.includes("match") ||
+    lower.includes("score") ||
+    lower.includes("ipl") ||
+    lower.includes("news") ||
+    lower.includes("sports") ||
+    lower.includes("movie") ||
+    lower.includes("politics") ||
+    lower.includes("prime minister") ||
+    lower.includes("president") ||
+    lower.includes("capital of") ||
+    lower.includes("food") ||
+    lower.includes("restaurant") ||
+    lower.includes("hotel") ||
+    lower.includes("joke") ||
+    lower.includes("song") ||
+    lower.includes("story") ||
+    lower.includes("dance") ||
+    lower.includes("who is") ||
+    lower.includes("who was") ||
+    lower.includes("elon musk") ||
+    lower.includes("bitcoin") ||
+    lower.includes("crypto") ||
+    lower.includes("stock market");
+
+  const isGeneralUnrelatedQuery =
+    queryMentionedCourses.length === 0 &&
+    detectedUnsupportedCourses.length === 0 &&
+    !hasSpecificAttributeQuery &&
+    !isFeeQuery &&
+    !isCourseCatalogQuery &&
+    !isBatchTimingQuery &&
+    !isDurationQuery &&
+    !isTopicsQuery &&
+    !isEligibilityQuery &&
+    !isLocationQuery &&
+    !isContactQuery &&
+    isUnrelatedOrChitchatQuery;
 
   // Check if the previous assistant message asked about reserving a seat / enrollment
   const prevAssistantMsg = conv
@@ -3106,7 +3266,6 @@ async function executeReceptionistTurn(
       isLocationQuery ||
       isContactQuery ||
       isTimingChangeQuery ||
-      isWeatherOrChitchat ||
       isComparisonQuery ||
       isDemoBookingQuery ||
       isBrochureOrWhatsAppQuery ||
@@ -3140,19 +3299,19 @@ async function executeReceptionistTurn(
       (activePhone && (foundMode || (foundBatch && !isJavaMorningRequested) || (isEnrollOrInterestIntent && !isExplicitQuestion)))
     );
 
-  if (queryMentionedCourses.length > 0 && isEnrollOrInterestIntent && !isExplicitQuestion) {
+  if (queryMentionedCourses.length > 0 && isEnrollOrInterestIntent && !isExplicitQuestion && !isPerCourseModeAssignment) {
     if (conv) {
       conv.customer_interested_courses = queryMentionedCourses.map((c) => c.displayName);
     }
   }
 
-  const interestedCoursesList = (queryMentionedCourses.length > 0 && isEnrollOrInterestIntent && !isExplicitQuestion)
-    ? queryMentionedCourses.map((c) => c.displayName)
-    : (conv?.customer_interested_courses && conv.customer_interested_courses.length > 0
-        ? conv.customer_interested_courses
-        : (queryMentionedCourses.length > 0 && !isExplicitQuestion
-            ? queryMentionedCourses.map((c) => c.displayName)
-            : (focusedCourse ? [focusedCourse.displayName] : [host.courseName])));
+  const interestedCoursesList = (conv?.customer_interested_courses && conv.customer_interested_courses.length > 0)
+    ? conv.customer_interested_courses
+    : (queryMentionedCourses.length > 0 && isEnrollOrInterestIntent && !isExplicitQuestion && !isPerCourseModeAssignment)
+      ? queryMentionedCourses.map((c) => c.displayName)
+      : (queryMentionedCourses.length > 0 && !isExplicitQuestion
+          ? queryMentionedCourses.map((c) => c.displayName)
+          : (focusedCourse ? [focusedCourse.displayName] : [host.courseName]));
 
   // Extract multi-intents for active turn
   const turnMultiIntents = parseMultiIntents(promptText, interestedCoursesList);
@@ -3165,7 +3324,9 @@ async function executeReceptionistTurn(
 
     if (interestedCoursesList.length > 0) {
       conv.selected_courses = interestedCoursesList;
-      conv.customer_interested_courses = interestedCoursesList;
+      if (isEnrollOrInterestIntent && !isExplicitQuestion && (!conv.customer_interested_courses || conv.customer_interested_courses.length === 0)) {
+        conv.customer_interested_courses = interestedCoursesList;
+      }
     }
     if (detectedUnsupportedCourses.length > 0) {
       conv.unsupported_courses = Array.from(new Set([...conv.unsupported_courses, ...detectedUnsupportedCourses]));
@@ -3354,13 +3515,17 @@ async function executeReceptionistTurn(
     // Update global conv.customer_mode and conv.customer_batch for backward compatibility
     const allModes = Object.values(conv.customer_course_preferences).map((p) => p.mode).filter(Boolean);
     const allBatches = Object.values(conv.customer_course_preferences).map((p) => p.batch).filter(Boolean);
-    if (allModes.length > 0) {
+    if (allModes.length === interestedCoursesList.length && allModes.length > 0) {
       const uniqueModes = Array.from(new Set(allModes));
       conv.customer_mode = uniqueModes.length === 1 ? uniqueModes[0] : uniqueModes.join(" / ");
+    } else if (interestedCoursesList.length <= 1 && allModes.length > 0) {
+      conv.customer_mode = allModes[0];
     }
-    if (allBatches.length > 0) {
+    if (allBatches.length === interestedCoursesList.length && allBatches.length > 0) {
       const uniqueBatches = Array.from(new Set(allBatches));
       conv.customer_batch = uniqueBatches.length === 1 ? uniqueBatches[0] : uniqueBatches.join(" / ");
+    } else if (interestedCoursesList.length <= 1 && allBatches.length > 0) {
+      conv.customer_batch = allBatches[0];
     }
   }
 
@@ -3548,15 +3713,17 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
 
       let response;
       const isPureFastPath =
-        isGreeting ||
-        isCasualAck ||
-        isWeatherOrChitchat ||
-        (Boolean(conv?.lead_step) && conv?.lead_step !== "CONFIRMED" && !isExplicitQuestion);
+        (isGreeting && !isExplicitQuestion) ||
+        (isCasualAck && !isExplicitQuestion) ||
+        (isUnrelatedOrChitchatQuery && queryMentionedCourses.length === 0 && !hasSpecificAttributeQuery) ||
+        (isGeneralUnrelatedQuery && !isExplicitQuestion) ||
+        (isUnsupportedCourseQuery && !isEnrollOrInterestIntent && !isCourseCatalogQuery && !isFeeQuery && !isBatchTimingQuery && !isDurationQuery && !isTopicsQuery && queryMentionedCourses.length === 0) ||
+        (Boolean(conv?.lead_step) && conv?.lead_step !== "CONFIRMED" && !isExplicitQuestion && !isFeeQuery && !isCourseCatalogQuery && !isBatchTimingQuery && !isTopicsQuery);
 
       if (!isPureFastPath) {
         try {
           const geminiPromise = aiClient.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.6-flash",
             contents: contentsPayload,
             config: {
               systemInstruction: sysInstruction,
@@ -3598,17 +3765,41 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
       }
     } else if (isGibberish) {
       reply = `I didn't quite catch that. Could you please rephrase your question? I'm here to help you with our courses, syllabus, batch timings, fees, or admissions!`;
-    } else if (isWeatherOrChitchat && !isExplicitQuestion) {
-      if (lower.includes("weather")) {
-        reply = `As an AI receptionist, I don't track live weather forecasts, but our learning environment and admissions desk are active and having a wonderful day! How can I assist you with our programs or enrollment?`;
-      } else if (lower.includes("how are you")) {
+    } else if ((isGeneralUnrelatedQuery || isWeatherOrChitchat || isTimeQuery || isMathQuery || isBikeOrParkingQuery || isKnowledgeBaseCountQuery) && queryMentionedCourses.length === 0 && !isFeeQuery && !isCourseCatalogQuery && !isBatchTimingQuery && !isDurationQuery && !isTopicsQuery) {
+      const compName = host.hostCompanyName || "Maruthi Technologies";
+      if (lower.includes("weather") || lower.includes("temperature") || lower.includes("raining") || lower.includes("rain") || lower.includes("forecast") || lower.includes("climate") || lower.includes("sunny") || lower.includes("hot") || lower.includes("cold")) {
+        reply = `As an AI receptionist for ${compName}, I don't track live weather conditions, but our campus in Ameerpet is open and all our online and classroom batches are operating normally as scheduled! How can I assist you with our training courses today?`;
+      } else if (lower.includes("how are you") || lower.includes("how do you do")) {
         reply = `I'm doing very well, thank you for asking! How can I assist you today with our courses, batch schedules, or admissions?`;
       } else if (lower.includes("who are you") || lower.includes("what is your name")) {
         const compPhrase = host.hostCompanyName ? ` at ${host.hostCompanyName}` : "";
         reply = `I'm ${agentName}, your AI receptionist${compPhrase}. I'm here to assist you with course information, syllabus details, batch timings, and admissions!`;
+      } else if (lower.includes("time") || lower.includes("timing") || lower.includes("clock") || lower.includes("hours")) {
+        reply = `I don't maintain a real-time clock, but visiting hours at ${compName} are Monday to Saturday, 9:00 AM – 7:00 PM IST, and evening batches start at 6:00 PM and 7:00 PM IST. How can I assist you today?`;
+      } else if (isMathQuery) {
+        const m = lower.match(/(\d+)\s*([x*+\-/])\s*(\d+)/);
+        if (m) {
+          const n1 = parseInt(m[1], 10);
+          const op = m[2];
+          const n2 = parseInt(m[3], 10);
+          const res = op === "x" || op === "*" ? n1 * n2 : op === "+" ? n1 + n2 : op === "-" ? n1 - n2 : op === "/" && n2 !== 0 ? n1 / n2 : 0;
+          reply = `${n1} ${op === "x" ? "×" : op} ${n2} = ${res}. Let me know if you have any questions about our Python or Java training courses!`;
+        } else {
+          reply = `Let me know if you have any questions about our Python or Java training courses!`;
+        }
+      } else if (isBikeOrParkingQuery) {
+        reply = `Yes, you can easily reach our campus by bike, metro, or bus. We are located right opposite Metro Pillar 1045 in Ameerpet, and two-wheeler parking is available nearby for students and visitors.`;
+      } else if (isKnowledgeBaseCountQuery) {
+        reply = `I am trained on official ${compName} course curriculum and admissions documentation, covering our certified Core Python Programming and Core Java Programming courses.`;
+      } else if (lower.includes("joke") || lower.includes("funny")) {
+        reply = `Why do Java programmers wear glasses? Because they don't C#! 😄 Let me know if you have any questions about our Core Python or Core Java certification courses!`;
       } else {
-        reply = `It is a pleasure to connect with you! How can I assist you today with our training programs or admissions?`;
+        reply = `As an AI receptionist for ${compName}, I specialize in providing course details, syllabus information, batch schedules, tuition fees, and admissions for our Core Python and Core Java certification programs. How can I assist you with your learning goals today?`;
       }
+    } else if (isUnsupportedCourseQuery && !isEnrollOrInterestIntent && !isCourseCatalogQuery && !isFeeQuery && !isBatchTimingQuery && !isDurationQuery && !isTopicsQuery && queryMentionedCourses.length === 0) {
+      const compName = host.hostCompanyName || "Maruthi Technologies";
+      const unsupp = detectedUnsupportedCourses.join(" and ");
+      reply = `Please note that ${unsupp} is not offered in our current training curriculum at ${compName}. We specialize exclusively in:\n• Core Python Programming (Tuition Fee: ₹4,000 | 30 Days)\n• Core Java Programming (Tuition Fee: ₹5,000 | 45 Days)\n\nWould you like more information on either of our verified certification programs?`;
     } else if (isGreeting && !isExplicitQuestion) {
       if (conv && messages.filter((m) => m.conversation_id === conv.id).length > 2) {
         reply = `Hello! How can I assist you today? I'm here to help you with our courses, syllabus, fees, batch timings, or enrollment!`;
@@ -3680,14 +3871,19 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
         if (conv) conv.lead_step = "MODE";
         if (interestedCoursesList.length > 1) {
           const coursesNeedingMode = interestedCoursesList.filter((c) => !conv?.customer_course_preferences?.[c]?.mode);
+          const coursesWithMode = interestedCoursesList.filter((c) => conv?.customer_course_preferences?.[c]?.mode);
           if (coursesNeedingMode.length === interestedCoursesList.length) {
             reply = `Thank you, ${activeName}! For each course you're joining (${interestedCoursesList.join(" and ")}), which training format do you prefer—Online (Live Interactive) or in-person Classroom Sessions? (You can choose the same format for both or customize per course!)`;
           } else {
             const pyPref = conv?.customer_course_preferences?.["Core Python Programming"]?.mode;
-            if (pyPref && coursesNeedingMode.some((c) => c.toLowerCase().includes("java"))) {
-              reply = `Welcome back, ${activeName}! I have your contact details (${activePhone}) and your ${pyPref} preference for Core Python Programming. For Core Java Programming, we offer the Evening Batch (6:00 PM – 7:30 PM IST). Would you like to confirm the Online format for Java as well?`;
+            const jvPref = conv?.customer_course_preferences?.["Core Java Programming"]?.mode;
+            if (pyPref && coursesNeedingMode.some((c) => c.toLowerCase().includes("java")) && !jvPref) {
+              reply = `Welcome back, ${activeName}! I have your contact details (${activePhone}) and your ${pyPref} preference for Core Python Programming. For Core Java Programming, which training format do you prefer—Online (Live Interactive) or in-person Classroom Sessions?`;
             } else {
-              reply = `Noted! And for ${coursesNeedingMode.join(" and ")}, which mode would you prefer—Online (Live Interactive) or Classroom Sessions?`;
+              const answeredSummary = coursesWithMode
+                .map((c) => `${c} (${conv?.customer_course_preferences?.[c]?.mode})`)
+                .join(" and ");
+              reply = `Got it, ${activeName}! ${answeredSummary} is noted. For ${coursesNeedingMode.join(" and ")}, which training format do you prefer—Online (Live Interactive) or Classroom Sessions?`;
             }
           }
         } else {
@@ -3726,9 +3922,9 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
       reply = `For Core Java Programming, we currently only offer an Evening Batch from 6:00 PM to 7:30 PM IST (Monday–Saturday). We do not have a morning batch scheduled for Java at this time. Would you be able to attend the evening batch, or consider our online live interactive sessions?`;
     } else if (isDiscountQuery) {
       reply = `I do not have any discount information in our current course details. The standard tuition fee is ₹4,000 for Core Python Programming and ₹5,000 for Core Java Programming.`;
-    } else if (isFeeQuery && (promptText.toLowerCase().trim() === "what are the fees?" || promptText.toLowerCase().trim() === "what are the fees" || lower === "fees" || lower === "fee")) {
+    } else if (isFeeQuery && !isWeatherOrChitchat && !isMathQuery && !isTimeQuery && (promptText.toLowerCase().trim() === "what are the fees?" || promptText.toLowerCase().trim() === "what are the fees" || lower === "fees" || lower === "fee")) {
       reply = `The tuition fee for Core Python Programming is ₹4,000 (30 Days duration), and for Core Java Programming it is ₹5,000 (45 Days duration). The total fee for both courses is ₹9,000.`;
-    } else if (isCourseCatalogQuery && (lower.includes("which courses do you offer") || lower.includes("what courses do you offer"))) {
+    } else if (isCourseCatalogQuery && !isWeatherOrChitchat && !isMathQuery && !isTimeQuery && !isBikeOrParkingQuery && (lower.includes("which courses do you offer") || lower.includes("what courses do you offer"))) {
       reply = `We offer the following career-focused certification courses at Maruthi Technologies:\n• Core Python Programming (Duration: 30 Days | Fee: ₹4,000)\n• Core Java Programming (Duration: 45 Days | Fee: ₹5,000)\n\nBoth courses are offered in Online Live Interactive mode as well as Classroom Sessions in Ameerpet, Hyderabad. Which course would you like to explore or join?`;
     } else if (isModeQuery && (lower.includes("can i join online") || lower.includes("join online?"))) {
       reply = `Yes, absolutely! Both Core Python Programming and Core Java Programming are available in Online Live Interactive mode as well as Classroom in Ameerpet, Hyderabad. All online sessions include live mentor guidance and recorded session backups.`;
@@ -3843,8 +4039,31 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
         return found;
       };
 
+      const findUnsupportedCoursesInText = (text: string): string[] => {
+        const t = text.toLowerCase();
+        const found: string[] = [];
+        for (const uc of sortedUnsupported) {
+          const escaped = uc.toLowerCase().replace(/[+.*^$()[\]{}|\\]/g, "\\$&");
+          if (new RegExp(`\\b${escaped}\\b`, "i").test(t)) {
+            const canonical =
+              uc === "Web" || uc === "Web Dev" || uc === "Web Design" || uc === "Web Designing"
+                ? "Web Development"
+                : uc === "Cybersecurity" || uc === "Cyber"
+                ? "Cyber Security"
+                : uc === "AI"
+                ? "Artificial Intelligence"
+                : uc;
+            if (!found.includes(canonical)) {
+              found.push(canonical);
+            }
+          }
+        }
+        return found;
+      };
+
       // 2. Question Segmentation (handles numbered questions, conjunctions, punctuation, and clause boundaries)
-      const splitClauseRegex = /(?:\r?\n)+|(?<=\d)[.)]\s+|[?;]|(?<=\w),(?=\s*(?:what|how|which|why|is|can|where|when|who|duration|fee|fees|topic|syllabus|batch|timing|location|map|contact))|\b(?:and\s+also|also|additionally|furthermore|plus|as\s+well\s+as)\b|\band\b(?=\s*(?:what|which|how|where|when|why|is|can|could|batch|timing|timings|schedule|fee|fees|cost|tuition|price|topic|topics|syllabus|curriculum|duration|eligibility|project|projects|address|location|map|maps|contact|phone|email|python|java))\b/i;
+      const splitClauseRegex =
+        /(?:\r?\n)+|(?<=\d)[.)]\s+|[?;]|(?<=[a-z0-9])\.\s+|\b(?:and\s+also|also|additionally|furthermore|plus|as\s+well\s+as)\b|(?<=\w)\s*,\s*(?=(?:what(?:s|'s)?|how(?:s|'s)?|which|why|is|can|could|where(?:s|'s)?|when(?:s|'s)?|who(?:s|'s)?|duration|fee|fees|cost|topic|syllabus|batch|timing|timings|schedule|location|map|contact|job|oppertunities|opportunities|career|placement|weather|temperature|time|python|java|web|cyber|data|\d+)\b)|\band\b(?=\s*(?:what(?:s|'s)?|which|how|where|when|why|is|can|could|batch|timing|timings|schedule|fee|fees|cost|tuition|price|topic|topics|syllabus|curriculum|duration|eligibility|project|projects|address|location|map|maps|contact|phone|email|python|java))\b/i;
       const rawSegments = promptText
         .split(splitClauseRegex)
         .map((s) => s.trim())
@@ -3880,6 +4099,7 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
       segmentsToProcess.forEach((seg) => {
         const segLower = seg.toLowerCase();
         const segCourses = findCoursesInText(seg);
+        const segUnsupportedCourses = findUnsupportedCoursesInText(seg);
 
         const hasFee = /\b(fee|fees|cost|price|pricing|how much|tuition|rate|charges|installment|payment)\b/i.test(segLower);
         const hasDuration = /\b(duration|how long|months?|weeks?|how many month|how many week|course length|timeline|period|how much time)\b/i.test(segLower);
@@ -3897,8 +4117,67 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
         const hasWhyChooseUs = /\b(why choose you|why i choose you|why choose your|why join you|why join your|why should i join|why should i choose|what makes you different|why you|benefits of joining|why study here|why this institute|why maruthi|why apex)\b/i.test(segLower);
         const hasCatalog = /\b(which courses?|what courses?|courses do you offer|course do you offer|courses you offer|courses you have|courses are available|course list|programs offered|what do you offer|programs do you offer|what do you teach|what training|classes do you offer|list of courses|all courses)\b/i.test(segLower);
 
-        // If specific course(s) are mentioned in THIS segment
-        if (segCourses.length > 0) {
+        // Standalone intents detection per segment
+        const hasWeather = /\b(weather|temperature|climate|forecast|raining|rainy|rain|sunny|hot|cold)\b/i.test(segLower);
+        if (hasWeather) {
+          const compName = host.hostCompanyName || "Maruthi Technologies";
+          if (!standaloneBlocks.some((b) => b.toLowerCase().includes("weather"))) {
+            standaloneBlocks.push(`• Weather / Campus Operations: As an AI receptionist for ${compName}, I don't track live weather forecasts, but our Ameerpet campus is fully open and all online and classroom batches are operating normally as scheduled!`);
+          }
+        }
+
+        const hasTime = /\b(time now|current time|what time is it|time right now|what is the time|clock time)\b/i.test(segLower);
+        if (hasTime) {
+          const compName = host.hostCompanyName || "Maruthi Technologies";
+          if (!standaloneBlocks.some((b) => b.toLowerCase().includes("current time"))) {
+            standaloneBlocks.push(`• Current Time: I don't maintain a real-time clock, but visiting hours at ${compName} are Monday to Saturday, 9:00 AM – 7:00 PM IST, and evening batches start at 6:00 PM and 7:00 PM IST.`);
+          }
+        }
+
+        const mathMatch = segLower.match(/(?:what is\s+)?(\d+)\s*([x*+\-/])\s*(\d+)/i);
+        if (mathMatch) {
+          const n1 = parseInt(mathMatch[1], 10);
+          const op = mathMatch[2];
+          const n2 = parseInt(mathMatch[3], 10);
+          const res = op === "x" || op === "*" ? n1 * n2 : op === "+" ? n1 + n2 : op === "-" ? n1 - n2 : op === "/" && n2 !== 0 ? n1 / n2 : 0;
+          if (!standaloneBlocks.some((b) => b.toLowerCase().includes("calculation"))) {
+            standaloneBlocks.push(`• Calculation: ${n1} ${op === "x" ? "×" : op} ${n2} = ${res}. Let me know if you have any questions about our Python or Java training courses!`);
+          }
+        }
+
+        const hasWhoAreYou = /\b(who are you|what is your name|who is this|what are you)\b/i.test(segLower);
+        if (hasWhoAreYou) {
+          const compName = host.hostCompanyName || "Maruthi Technologies";
+          if (!standaloneBlocks.some((b) => b.toLowerCase().includes("about me"))) {
+            standaloneBlocks.push(`• About Me: I am Maya, the AI receptionist for ${compName}. I assist with course inquiries, batch timings, fees, syllabus details, demo classes, and admissions!`);
+          }
+        }
+
+        const hasBikeOrParking = /\b(reach you on bike|reach on bike|come by bike|bike|parking space|parking available|parking facility|car parking|two wheeler)\b/i.test(segLower);
+        if (hasBikeOrParking) {
+          if (!standaloneBlocks.some((b) => b.toLowerCase().includes("commute & parking"))) {
+            standaloneBlocks.push(`• Commute & Parking: Yes, you can easily reach our campus by bike, metro, or bus. We are located right opposite Metro Pillar 1045 in Ameerpet, and two-wheeler parking is available nearby for students and visitors.`);
+          }
+        }
+
+        const hasKnowledgeBase = /\b(how many knowledge documents|knowledge documents|knowledge base|documents you have)\b/i.test(segLower);
+        if (hasKnowledgeBase) {
+          const compName = host.hostCompanyName || "Maruthi Technologies";
+          if (!standaloneBlocks.some((b) => b.toLowerCase().includes("knowledge base"))) {
+            standaloneBlocks.push(`• Knowledge Base: I am trained on official ${compName} curriculum and admissions documentation, covering our certified Core Python Programming and Core Java Programming courses.`);
+          }
+        }
+
+        // Check if an unsupported course is mentioned in THIS segment without a supported course
+        if (segUnsupportedCourses.length > 0 && segCourses.length === 0) {
+          const compName = host.hostCompanyName || "Maruthi Technologies";
+          segUnsupportedCourses.forEach((uCourse) => {
+            if (!standaloneBlocks.some((b) => b.toLowerCase().includes(uCourse.toLowerCase()))) {
+              standaloneBlocks.push(`• ${uCourse}: Please note that ${uCourse} is not currently offered in our training curriculum at ${compName}. We specialize exclusively in Core Python Programming (Tuition Fee: ₹4,000 | 30 Days) and Core Java Programming (Tuition Fee: ₹5,000 | 45 Days).`);
+            }
+          });
+        } else if (segCourses.length > 0) {
+          // If specific course(s) are mentioned in THIS segment
           segCourses.forEach((c) => {
             const entry = getOrInitCourse(c);
             let anySpecificFacetSet = false;
@@ -4082,6 +4361,16 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
         }
       });
 
+      // Ensure any unsupported courses detected across the entire prompt are included
+      if (detectedUnsupportedCourses.length > 0 && queryMentionedCourses.length === 0) {
+        const compName = host.hostCompanyName || "Maruthi Technologies";
+        detectedUnsupportedCourses.forEach((uCourse) => {
+          if (!standaloneBlocks.some((b) => b.toLowerCase().includes(uCourse.toLowerCase()))) {
+            standaloneBlocks.push(`• ${uCourse}: Please note that ${uCourse} is not currently offered in our training curriculum at ${compName}. We specialize exclusively in Core Python Programming (Tuition Fee: ₹4,000 | 30 Days) and Core Java Programming (Tuition Fee: ₹5,000 | 45 Days).`);
+          }
+        });
+      }
+
       // 5. Build Composite Response Blocks
       const allResponseBlocks: string[] = [];
 
@@ -4130,17 +4419,28 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
 
       // 6. Compose Final Comprehensive Reply
       if (allResponseBlocks.length > 0) {
+        const isOngoingConversation = Boolean(
+          conv && messages.filter((m) => m.conversation_id === conv.id).length >= 1
+        );
         const questionCount = allResponseBlocks.length + Object.values(courseAnswers).reduce((acc, cur) => acc + (cur.fee ? 1 : 0) + (cur.duration ? 1 : 0) + (cur.topics ? 1 : 0), 0);
         const isMultipleQuestions = questionCount > 2 || allResponseBlocks.length > 1;
 
-        const greetingHeader = host.hostCompanyName
-          ? `Welcome to ${host.hostCompanyName}! Here is the information for your questions:\n\n`
-          : `Here is the information for your questions:\n\n`;
+        let singleHeader = "";
+        if (isMultipleQuestions) {
+          if (isOngoingConversation) {
+            singleHeader = "Here is the information for your questions:\n\n";
+          } else if (host.hostCompanyName) {
+            singleHeader = `Welcome to ${host.hostCompanyName}! Here is the information for your questions:\n\n`;
+          } else {
+            singleHeader = "Here is the information for your questions:\n\n";
+          }
+        }
 
-        const singleHeader = isMultipleQuestions ? greetingHeader : "";
         const footer = (conv?.lead_step && conv.lead_step !== "CONFIRMED") || isPurelyInformationalQuery
           ? ""
-          : `\n\nWould you like to reserve a seat in an upcoming batch, or can I assist you with enrollment?`;
+          : (allResponseBlocks.length > 1 || isFeeQuery || isTimingQuery
+              ? `\n\nWould you like to reserve a seat in an upcoming batch, or can I assist you with enrollment?`
+              : "");
 
         reply = `${singleHeader}${allResponseBlocks.join("\n\n")}${footer}`;
       } else {
@@ -4181,7 +4481,25 @@ Critical Guidelines for Multi-Question Mastery, Course Differentiation & Respons
           lower.includes("?") ||
           /\b(what|who|where|when|why|how|can i|is there|do you|are there|does|provide|offer)\b/i.test(lower);
 
-        if (isPlacementQuestion) {
+        if (detectedUnsupportedCourses.length > 0) {
+          const unsupp = detectedUnsupportedCourses.join(" and ");
+          reply = `Please note that ${unsupp} is not offered in our current training curriculum at ${compName}. We specialize exclusively in:\n• Core Python Programming (Tuition Fee: ₹4,000 | 30 Days)\n• Core Java Programming (Tuition Fee: ₹5,000 | 45 Days)\n\nWould you like more information on either of our verified certification programs?`;
+        } else if (lower.includes("weather") || lower.includes("temperature") || lower.includes("raining") || lower.includes("forecast") || lower.includes("climate")) {
+          reply = `As an AI receptionist for ${compName}, I don't track live weather forecasts, but our Ameerpet campus is fully open and all online and classroom batches are operating normally as scheduled! How can I assist you with our training courses today?`;
+        } else if (isTimeQuery) {
+          reply = `I don't maintain a real-time clock, but visiting hours at ${compName} are Monday to Saturday, 9:00 AM – 7:00 PM IST, and evening batches start at 6:00 PM and 7:00 PM IST. How can I assist you today?`;
+        } else if (isMathQuery) {
+          const m = lower.match(/(\d+)\s*([x*+\-/])\s*(\d+)/);
+          if (m) {
+            const n1 = parseInt(m[1], 10);
+            const op = m[2];
+            const n2 = parseInt(m[3], 10);
+            const res = op === "x" || op === "*" ? n1 * n2 : op === "+" ? n1 + n2 : op === "-" ? n1 - n2 : op === "/" && n2 !== 0 ? n1 / n2 : 0;
+            reply = `${n1} ${op === "x" ? "×" : op} ${n2} = ${res}. Let me know if you have any questions about our Python or Java training courses!`;
+          } else {
+            reply = `I can help calculate standard fees and installment schedules for our courses. Let me know if you need fee details!`;
+          }
+        } else if (isPlacementQuestion) {
           reply = `I don't have verified placement assistance data in our current course records right now. You can contact our team directly at ${contactPhone} or email ${contactEmail}, and our admissions team will be delighted to provide you with our latest placement support, mock interview preparation, and hiring partner details!`;
         } else if (isFacultyQuestion) {
           reply = `I don't have specific instructor profiles or faculty details in our current records right now. You can contact our admissions desk directly at ${contactPhone} or email ${contactEmail}, and our team will be glad to share faculty credentials, experience, and mentoring details with you!`;
@@ -4480,7 +4798,7 @@ app.post("/api/v1/onboarding/register-company", (req, res) => {
     created_at: new Date().toISOString(),
     organization_id: newOrgId,
     is_superuser: true,
-  };
+  } as unknown as UserModel;
   users.push(newUser);
 
   const slug = (public_slug || organization_name.toLowerCase().replace(/\s+/g, "-")).toLowerCase();
@@ -4499,7 +4817,7 @@ app.post("/api/v1/onboarding/register-company", (req, res) => {
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
     phone_number: "+1 (800) 555-0199",
     languages: ["en"],
-  };
+  } as unknown as AgentModel;
   agents.push(newAgent);
   savePersistence();
 
@@ -4845,6 +5163,7 @@ app.post("/api/v1/chat/public-message", async (req, res) => {
 
   res.json({
     session_id: sid,
+    conversation_id: conv.id,
     response: outcome.reply,
     reply: outcome.reply,
     message: outcome.reply,
@@ -5190,13 +5509,13 @@ app.get("/api/v1/universal/benchmark", async (_req, res) => {
 app.post("/api/v1/universal/dynamic-test-suite", (req, res) => {
   try {
     const { agent_id, count = 1000, domain_name } = req.body;
-    let docsToUse = documents;
+    let docsToUse = knowledgeItems;
     let agentName = "Company";
 
     if (agent_id) {
       const seed = MULTI_INDUSTRY_SEEDS.find((s) => s.agent.id === Number(agent_id));
       if (seed) {
-        docsToUse = seed.documents as typeof documents;
+        docsToUse = seed.documents as typeof knowledgeItems;
         agentName = seed.agent.name;
       }
     }
@@ -5263,12 +5582,12 @@ app.post("/api/v1/universal/chat", async (req, res) => {
     }
 
     let agentToUse = agents.find((a) => a.id === Number(agent_id)) || agents[0];
-    let docsToUse = documents;
+    let docsToUse = knowledgeItems;
 
     const seed = MULTI_INDUSTRY_SEEDS.find((s) => s.agent.id === Number(agent_id));
     if (seed) {
       agentToUse = seed.agent as unknown as typeof agents[0];
-      docsToUse = seed.documents as unknown as typeof documents;
+      docsToUse = seed.documents as unknown as typeof knowledgeItems;
     }
 
     if (Array.isArray(raw_docs) && raw_docs.length > 0) {
@@ -6028,7 +6347,7 @@ app.post("/api/v1/google/gmail/send", async (req, res) => {
       return res.status(sendRes.status).json({ detail: `Gmail send error: ${errText}` });
     }
 
-    const sendData = await sendRes.json();
+    const sendData = (await sendRes.json()) as { id?: string; threadId?: string };
     res.json({
       success: true,
       message_id: sendData.id,
@@ -6060,7 +6379,7 @@ app.get("/api/v1/google/sheets/list", async (req, res) => {
       return res.status(driveRes.status).json({ detail: `Google Drive API error: ${errText}` });
     }
 
-    const driveData = await driveRes.json();
+    const driveData = (await driveRes.json()) as { files?: Array<{ id: string; name: string; modifiedTime?: string; webViewLink?: string }> };
     res.json({ files: driveData.files || [] });
   } catch (err) {
     res.status(500).json({ detail: err instanceof Error ? err.message : "Failed to list spreadsheets." });
