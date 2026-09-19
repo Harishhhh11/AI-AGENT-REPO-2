@@ -2553,6 +2553,20 @@ async function executeReceptionistTurn(
   }
 
   // Identify Courses Mentioned in Current Prompt
+  const unsupportedCourseMentions = /(?:join|enroll|interested in|learn|course|program|training|development)\\s+(?:in\\s+)?([a-z][a-z0-9+#. -]{2,40})(?:\\s+and|$)/i;
+  let unsupportedRequestedCourse: string | null = null;
+  const unsupportedMatch = promptText.match(unsupportedCourseMentions);
+  if (unsupportedMatch) {
+    const candidate = unsupportedMatch[1].trim().replace(/\\s+/g, " ");
+    const known = educationalCourses.some((doc) => {
+      const key = doc.displayName.toLowerCase().replace(/^core\\s+/i, "");
+      return candidate.toLowerCase().includes(key) || key.includes(candidate.toLowerCase());
+    });
+    if (!known && !/^(this|that|the|a|an|it)$/i.test(candidate)) {
+      unsupportedRequestedCourse = candidate;
+    }
+  }
+
   const queryMentionedCourses = educationalCourses.filter((doc) => {
     const docNameLower = doc.displayName.toLowerCase();
     const docRawTitleLower = doc.rawTitle.toLowerCase();
@@ -2568,6 +2582,13 @@ async function executeReceptionistTurn(
       matchesClean
     );
   });
+
+  if (unsupportedRequestedCourse && isEnrollOrInterestIntent) {
+    intent = "unsupported_course_request";
+    if (conv) {
+      conv.customer_interested_courses = conv.customer_interested_courses || [];
+    }
+  }
 
   const isGeneralPluralQuery =
     lower.includes("course fees") ||
