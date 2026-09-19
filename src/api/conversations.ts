@@ -19,6 +19,19 @@ export interface Conversation {
     referrer?: string | null;
     landing_page?: string | null;
   } | null;
+  current_intent?: string;
+  previous_intent?: string;
+  current_topic?: string;
+  topic_stack?: string[];
+  selected_courses?: string[];
+  unsupported_courses?: string[];
+  customer_course_preferences?: Record<string, { mode?: string | null; batch?: string | null }> | null;
+  enrollment_state?: {
+    status?: "idle" | "collecting_information" | "paused" | "completed";
+    completed_fields?: string[];
+    missing_fields?: string[];
+  } | null;
+  pending_question?: string | null;
   multi_intents?: Array<{
     type: string;
     subject?: string | null;

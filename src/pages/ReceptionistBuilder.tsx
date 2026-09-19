@@ -31,6 +31,7 @@ import {
 } from "../api/agents";
 import { getKnowledge, type KnowledgeItem } from "../api/knowledge";
 import { uploadDocument } from "../api/documents";
+import { getUniversalIndustriesApi, type IndustryTemplateItem } from "../api/lab";
 
 // Pre-built curated avatar options
 const AVATAR_OPTIONS = [
@@ -173,6 +174,79 @@ export default function ReceptionistBuilder() {
 
   // Voice playback test state
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Multi-Industry Presets state
+  const [industryPresets, setIndustryPresets] = useState<IndustryTemplateItem[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
+
+  // Fetch multi-industry presets
+  useEffect(() => {
+    getUniversalIndustriesApi()
+      .then((res) => {
+        if (res?.industries) {
+          setIndustryPresets(res.industries);
+        }
+      })
+      .catch((err) => console.warn("Failed to load industry presets:", err));
+  }, []);
+
+  function applyIndustryPreset(preset: IndustryTemplateItem) {
+    setSelectedPresetId(preset.agent.id);
+
+    // Pick avatar by industry
+    let matchedAvatar = AVATAR_OPTIONS[0].url;
+    if (preset.agent.industry.includes("Hospitality")) {
+      matchedAvatar = AVATAR_OPTIONS.find((a) => a.id === "aisha")?.url || AVATAR_OPTIONS[7].url;
+    } else if (preset.agent.industry.includes("Healthcare") || preset.agent.industry.includes("Medical")) {
+      matchedAvatar = AVATAR_OPTIONS.find((a) => a.id === "sophia")?.url || AVATAR_OPTIONS[4].url;
+    } else if (preset.agent.industry.includes("Real Estate")) {
+      matchedAvatar = AVATAR_OPTIONS.find((a) => a.id === "alex")?.url || AVATAR_OPTIONS[2].url;
+    } else if (preset.agent.industry.includes("Restaurant")) {
+      matchedAvatar = AVATAR_OPTIONS.find((a) => a.id === "maya")?.url || AVATAR_OPTIONS[0].url;
+    } else if (preset.agent.industry.includes("Software") || preset.agent.industry.includes("SaaS")) {
+      matchedAvatar = AVATAR_OPTIONS.find((a) => a.id === "marcus")?.url || AVATAR_OPTIONS[6].url;
+    } else if (preset.agent.industry.includes("EdTech") || preset.agent.industry.includes("Academy")) {
+      matchedAvatar = AVATAR_OPTIONS.find((a) => a.id === "priya")?.url || AVATAR_OPTIONS[1].url;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      name: preset.agent.name,
+      public_slug: slugify(preset.agent.name),
+      avatar: matchedAvatar,
+      welcome_message: preset.agent.greeting_message,
+      system_instructions: preset.agent.system_prompt,
+      personality: preset.agent.industry.includes("Hospitality")
+        ? "friendly"
+        : preset.agent.industry.includes("Healthcare")
+        ? "support_oriented"
+        : preset.agent.industry.includes("Real Estate")
+        ? "sales_oriented"
+        : "professional",
+    }));
+
+    // Extract quick business contact from documents if present
+    const firstDoc = preset.documents[0]?.content || "";
+    const phoneMatch = firstDoc.match(/Phone\s*:\s*([^\n\r]+)/i);
+    const emailMatch = firstDoc.match(/Email\s*:\s*([^\n\r]+)/i);
+    const addressMatch = firstDoc.match(/Location\s*:\s*([^\n\r]+)/i);
+    const hoursMatch = firstDoc.match(/(?:Check-in Time|Consultation Timings|Office Hours|Timings)\s*:\s*([^\n\r]+)/i);
+
+    const compName = preset.agent.name.includes("—")
+      ? preset.agent.name.split("—")[1].trim()
+      : preset.agent.name;
+
+    setBusinessProfile({
+      companyName: compName,
+      phone: phoneMatch ? phoneMatch[1].trim() : "+1 (555) 019-2831",
+      email: emailMatch ? emailMatch[1].trim() : "desk@company.com",
+      address: addressMatch ? addressMatch[1].trim() : "Downtown Business Park",
+      workingHours: hoursMatch ? hoursMatch[1].trim() : "9:00 AM - 6:00 PM (Mon-Sat)",
+    });
+
+    setSuccess(`Applied ${preset.agent.industry} preset for ${preset.agent.name}!`);
+    setTimeout(() => setSuccess(""), 4000);
+  }
 
   // Load existing agent if editing or fetch initial knowledge items
   useEffect(() => {
@@ -579,6 +653,45 @@ export default function ReceptionistBuilder() {
                         Define the name, avatar photo, speech style, and welcoming tone for your front-desk assistant.
                       </p>
                     </div>
+
+                    {/* Quick Industry Starter Templates */}
+                    {industryPresets.length > 0 && (
+                      <div className="rounded-2xl border border-indigo-500/20 bg-indigo-950/20 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-amber-300" />
+                            <span className="text-xs font-bold uppercase tracking-wider text-indigo-200">
+                              Quick Industry Starter Templates
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400">
+                            1-Click Domain Setup
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {industryPresets.map((preset) => {
+                            const isSelected = selectedPresetId === preset.agent.id;
+                            return (
+                              <button
+                                key={preset.agent.id}
+                                type="button"
+                                onClick={() => applyIndustryPreset(preset)}
+                                className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                                  isSelected
+                                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400"
+                                    : "bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800"
+                                }`}
+                              >
+                                <span>{preset.agent.industry}</span>
+                                <span className="text-[10px] opacity-75 font-normal">
+                                  ({preset.agent.business_type})
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
