@@ -2900,23 +2900,6 @@ async function executeReceptionistTurn(
     prevAssistantMsg.toLowerCase().includes("may i have your full name") ||
     prevAssistantMsg.toLowerCase().includes("phone number");
 
-  // Enrollment is an explicit intent, not something inherited merely because
-  // the previous turn was an enrollment step. Informational questions must remain
-  // informational and must never advance the lead workflow.
-  const explicitEnrollmentIntent = /\b(join|enroll|enrollment|admission|register|apply|sign\s*up|reserve\s+(?:a\s+)?seat|book\s+(?:a\s+)?seat|interested\s+in\s+(?:joining|enrolling)|want\s+to\s+(?:join|enroll|learn))\b/i.test(lower);
-  const isEnrollmentAnswerTurn =
-    Boolean(conv?.lead_step) &&
-    !isExplicitQuestion &&
-    !isGibberish &&
-    (Boolean(prevAskedEnrollment) || conv?.lead_step === "NAME" || conv?.lead_step === "PHONE" || conv?.lead_step === "MODE" || conv?.lead_step === "BATCH" || conv?.lead_step === "EXPERIENCE") &&
-    !/\b(what|which|how|why|where|when|can|could|do|does|is|are|tell|give|show)\b.*\?/i.test(promptText);
-  const isEnrollOrInterestIntent =
-    (explicitEnrollmentIntent || isEnrollmentAnswerTurn) &&
-    !isWhyChooseUsQuery &&
-    !isWhyLearnSubjectQuery &&
-    !isComparisonQuery &&
-    !isExplicitQuestion;
-
   const isExplicitQuestion =
     isWhyChooseUsQuery ||
     isWhyLearnSubjectQuery ||
@@ -2944,9 +2927,28 @@ async function executeReceptionistTurn(
   // 4. Real-time Lead Database Synchronization
   let leadCreated: LeadModel | null = null;
   const hasContactInfo = Boolean(activePhone || activeEmail);
+  const isEnrollmentAnswerTurn =
+    Boolean(conv?.lead_step) &&
+    !isExplicitQuestion &&
+    !isGibberish &&
+    (Boolean(prevAskedEnrollment) ||
+      conv?.lead_step === "NAME" ||
+      conv?.lead_step === "PHONE" ||
+      conv?.lead_step === "MODE" ||
+      conv?.lead_step === "BATCH" ||
+      conv?.lead_step === "EXPERIENCE") &&
+    !/\b(what|which|how|why|where|when|can|could|do|does|is|are|tell|give|show)\b.*\?/i.test(promptText);
+  const explicitEnrollmentIntent =
+    /\b(join|enroll|enrollment|admission|register|apply|sign\s*up|reserve\s+(?:a\s+)?seat|book\s+(?:a\s+)?seat|interested\s+in\s+(?:joining|enrolling)|want\s+to\s+(?:join|enroll|learn))\b/i.test(lower) &&
+    !isExplicitQuestion;
+  const isEnrollOrInterestIntent =
+    (explicitEnrollmentIntent || isEnrollmentAnswerTurn) &&
+    !isWhyChooseUsQuery &&
+    !isWhyLearnSubjectQuery &&
+    !isComparisonQuery;
   const shouldCreateOrUpdateLead =
-    hasContactInfo ||
-    Boolean(activeName && !isGibberishOrInvalidName(activeName) && (hasContactInfo || isEnrollOrInterestIntent || conv?.lead_step));
+    !isExplicitQuestion &&
+    (hasContactInfo || Boolean(isEnrollOrInterestIntent && activeName));
 
   if (queryMentionedCourses.length > 0 && isEnrollOrInterestIntent && !isExplicitQuestion) {
     if (conv) {
