@@ -1747,10 +1747,11 @@ function resolveHostDetails(agentObj: AgentModel): ExtractedOrgInfo {
     }
   }
 
-  let agentDocs = knowledgeItems.filter((k) => k.is_active && agentObj?.knowledge_item_ids?.includes(k.id));
-  if (agentDocs.length === 0) {
-    agentDocs = knowledgeItems.filter((k) => k.is_active);
-  }
+  // Strict knowledge boundary: an agent can use only explicitly assigned active
+  // documents. Never fall back to the entire tenant knowledge base.
+  const agentDocs = knowledgeItems.filter(
+    (k) => k.is_active && agentObj?.knowledge_item_ids?.includes(k.id),
+  );
 
   const parsedDocs = parseKnowledgeBase(agentDocs);
 
