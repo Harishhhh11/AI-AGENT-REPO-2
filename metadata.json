@@ -1,0 +1,6 @@
+{
+  "name": "AI Receptionist Platform",
+  "description": "An enterprise-grade multi-tenant AI Receptionist Platform with website chat, lead management, knowledge base RAG, and analytics.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
