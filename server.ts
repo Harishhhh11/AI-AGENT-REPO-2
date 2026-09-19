@@ -2091,6 +2091,91 @@ export function updateKOSummary(conv: ConversationModel, groundingSources: { id:
   };
 }
 
+// ==========================================
+// V4 Receptionist deterministic helpers
+// ==========================================
+
+type V4ReceptionistIntent =
+  | "greeting" | "catalog" | "course_fact" | "mode" | "batch" | "enrollment"
+  | "contact" | "location" | "discount" | "escalation" | "chitchat" | "unknown";
+
+interface V4CourseFacts {
+  course: string;
+  aliases: string[];
+  duration: string;
+  mode: string;
+  fee: string;
+  batch: string;
+  nextBatch: string;
+  topics: string[];
+  projects: string[];
+  prerequisites: string | null;
+  benefits: string[];
+}
+
+function buildV4CourseFacts(docs: KnowledgeItemModel[]): V4CourseFacts[] {
+  return parseKnowledgeBase(docs).filter((d) => d.isEducationalCourse).map((d) => ({
+    course: d.displayName,
+    aliases: [d.displayName.toLowerCase(), d.rawTitle.toLowerCase()],
+    duration: d.duration || "",
+    mode: d.modes.join(" + ") || "",
+    fee: d.fee || "",
+    batch: d.batchTimings[0] || "",
+    nextBatch: (d.rawContent.match(/Next Batch\\s*:\\s*([^\\r\\n]+)/i)?.[1] || "").trim(),
+    topics: d.topics || [],
+    projects: d.projects || [],
+    prerequisites: d.eligibility || null,
+    benefits: [],
+  }));
+}
+
+function v4FindCourse(text: string, facts: V4CourseFacts[]): V4CourseFacts | null {
+  const lower = text.toLowerCase();
+  return facts.find((f) => f.aliases.some((a) => lower.includes(a) || lower.includes(a.replace(/^core\\s+/i, "")))) || null;
+}
+
+function v4DetectIntent(text: string): V4ReceptionistIntent {
+  const l = text.toLowerCase().trim();
+  if (!l) return "unknown";
+  if (/^(hi|hello|hey|namaste|good morning|good afternoon|good evening)[!.\\s]*$/i.test(text)) return "greeting";
+  if (/\\b(human|operator|manager|complaint|angry|real person|speak to someone|lawyer)\\b/i.test(l)) return "escalation";
+  if (/\\b(discount|concession|waiver|reduce.*fee|lower.*fee)\\b/i.test(l)) return "discount";
+  if (/\\b(join|enroll|enrollment|admission|register|apply|sign\\s*up|reserve.*seat|interested.*join)\\b/i.test(l)) return "enrollment";
+  if (/\\b(online|offline|classroom|in[- ]person|mode)\\b/i.test(l)) return "mode";
+  if (/\\b(morning|evening|afternoon|batch|timing|timings|schedule|next batch|when.*start)\\b/i.test(l)) return "batch";
+  if (/\\b(fee|fees|price|cost|tuition|duration|how long|topics?|syllabus|curriculum|projects?|prerequisite|eligible|benefits?)\\b/i.test(l)) return "course_fact";
+  if (/\\b(which courses|what courses|courses do you offer|all courses|list.*courses)\\b/i.test(l)) return "catalog";
+  if (/\\b(phone|whatsapp|email|contact)\\b/i.test(l)) return "contact";
+  if (/\\b(location|address|where.*located|campus)\\b/i.test(l)) return "location";
+  if (/^(thanks|thank you|ok|okay|great|cool|nice|sure|perfect|yes|yep|yeah)[!.\\s]*$/i.test(text)) return "chitchat";
+  return "unknown";
+}
+
+function v4RequestedAttributes(text: string): Set<string> {
+  const l=text.toLowerCase(); const a=new Set<string>();
+  if (/\\b(fee|fees|price|cost|tuition)\\b/.test(l)) a.add("fee");
+  if (/\\b(duration|how long)\\b/.test(l)) a.add("duration");
+  if (/\\b(topic|topics|syllabus|curriculum)\\b/.test(l)) a.add("topics");
+  if (/\\b(project|projects)\\b/.test(l)) a.add("projects");
+  if (/\\b(prerequisite|eligib)\\b/.test(l)) a.add("prerequisite");
+  if (/\\b(benefit|benefits)\\b/.test(l)) a.add("benefits");
+  if (/\\b(mode|online|offline|classroom|in[- ]person)\\b/.test(l)) a.add("mode");
+  if (/\\b(batch|timing|timings|schedule|next batch|when.*start)\\b/.test(l)) a.add("batch");
+  return a;
+}
+
+function v4RenderCourseFacts(f: V4CourseFacts, attrs:Set<string>): string {
+  const out:string[]=[];
+  if (attrs.has("fee")) out.push(`• Fee: ${f.fee}`);
+  if (attrs.has("duration")) out.push(`• Duration: ${f.duration}`);
+  if (attrs.has("mode")) out.push(`• Mode: ${f.mode}`);
+  if (attrs.has("batch")) out.push(`• Batch Timing: ${f.batch}${f.nextBatch ? `\\n• Next Batch: ${f.nextBatch}` : ""}`);
+  if (attrs.has("topics")) out.push(`• Topics Covered: ${f.topics.join("; ")}`);
+  if (attrs.has("projects")) out.push(`• Projects: ${f.projects.join("; ")}`);
+  if (attrs.has("prerequisite")) out.push(`• Prerequisites: ${f.prerequisites || "Not provided."}`);
+  if (attrs.has("benefits") && f.benefits.length) out.push(`• Benefits: ${f.benefits.join("; ")}`);
+  return out.join("\\n");
+}
 // Master Receptionist Agent Reasoner
 async function executeReceptionistTurn(
   userText: string,
