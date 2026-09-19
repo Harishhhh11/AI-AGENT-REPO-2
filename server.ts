@@ -2121,7 +2121,7 @@ function buildV4CourseFacts(docs: KnowledgeItemModel[]): V4CourseFacts[] {
     mode: d.modes.join(" + ") || "",
     fee: d.fee || "",
     batch: d.batchTimings[0] || "",
-    nextBatch: (d.rawContent.match(/Next Batch\\s*:\\s*([^\\r\\n]+)/i)?.[1] || "").trim(),
+    nextBatch: (d.rawContent.match(/Next Batch\s*:\s*([^\r\n]+)\\r\\n]+)/i)?.[1] || "").trim(),
     topics: d.topics || [],
     projects: d.projects || [],
     prerequisites: d.eligibility || null,
